@@ -1,5 +1,15 @@
 from . base import *
 
+# CORS CONFIGURATIONS
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+]
+
+
 DATABASES = {
     "default": {
         "ENGINE": config("POSTGRES_ENGINE"),

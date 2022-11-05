@@ -25,6 +25,16 @@ DEBUG = config('DEBUG')
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS').split(" ")
 
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'common.custom_methods.custom_exception_handler',
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.AllowAny',
+    ),
+}
+
+JWT_ALLOW_REFRESH = True
 
 # Application definition
 
@@ -42,6 +52,8 @@ DJANGO_APPS = [
 SITE_ID = 1
 
 THIRD_PARTY_APPS = [
+    'rest_framework',
+    'corsheaders',
     'cloudinary_storage',
     'cloudinary',
     'debug_toolbar',
@@ -63,10 +75,26 @@ AUTHENTICATION_BACKENDS = [
     'apps.accounts.backends.EmailOrPhoneAuthenticationBackend'
 ]
 
+CORS_ALLOW_HEADERS = (
+    'x-requested-with',
+    'content-type',
+    'accept',
+    'origin',
+    'authorization',
+    'accept-encoding',
+    'x-csrftoken',
+    'access-control-allow-origin',
+    'content-disposition'
+)
+CORS_ALLOW_CREDENTIALS = False
+
+CORS_ALLOW_METHODS = ('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS')
+
 MIDDLEWARE = [
     'debug_toolbar.middleware.DebugToolbarMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -161,14 +189,14 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')
 
 #SMS Settings
 SMS_BACKEND = 'sms.backends.twilio.SmsBackend'
+DEFAULT_FROM_PHONE = config('DEFAULT_FROM_PHONE')
 TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN')
 
 INTERNAL_IPS = [
     '127.0.0.1',
 ]
-
-SITE_NAME = "Whatsapp Web Clone V2"
+SITE_NAME = config('SITE_NAME')
 
 logger = logging.getLogger(__name__)
 

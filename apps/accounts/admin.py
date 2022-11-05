@@ -67,6 +67,10 @@ class UserAdmin(BaseUserAdmin):
             _("Permissions and Groups"),
             {
                 "fields": (
+                    "otp",
+                    "is_email_verified",
+                    "is_phone_verified",
+                    "is_online",
                     "is_active",
                     "is_staff",
                     "is_superuser",

@@ -1,7 +1,9 @@
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 
 class CustomPasswordValidator():
 
@@ -15,6 +17,14 @@ class CustomPasswordValidator():
         return ""
 
 phone_regex_pattern = RegexValidator(regex=r'^\+[0-9]*$', message='Phone number must be in this format: +1234567890')
+
+def validate_email(value):
+    if User.objects.filter(email=value).exists():
+        raise ValidationError('Email already registered')
+
+def validate_phone(value):
+    if User.objects.filter(phone=value).exists():
+        raise ValidationError('Phone already registered')
 
 # class CustomPasswordValidator():
 
