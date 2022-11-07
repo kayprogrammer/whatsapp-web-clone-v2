@@ -10,11 +10,12 @@ import six
 import threading
 import random
 
-class TokenGenerator(PasswordResetTokenGenerator):
+class EmailVerificationTokenGenerator(PasswordResetTokenGenerator):
     def _make_hash_value(self, user, timestamp):
         return (six.text_type(user.id)+six.text_type(timestamp)+six.text_type(user.is_email_verified))
 
-generate_token = TokenGenerator()
+email_verification_generate_token = EmailVerificationTokenGenerator()
+password_reset_generate_token = PasswordResetTokenGenerator()
 
 class MessageThread(threading.Thread):
 
@@ -27,15 +28,14 @@ class MessageThread(threading.Thread):
 
 class Util:
     @staticmethod
-    def send_verification_email(request, user):
-        current_site = f'{request.scheme}://{request.get_host()}'
+    def send_verification_email(user):
         subject = 'Activate your account'
         message = render_to_string('accounts/email-activation-message.html', {
             'name':user.name, 
-            'domain':current_site, 
+            'FRONTEND_URL':settings.FRONTEND_URL, 
             'site_name': settings.SITE_NAME,
             'uid': urlsafe_base64_encode(force_bytes(user.id)),
-            'token': generate_token.make_token(user)
+            'token': email_verification_generate_token.make_token(user)
         })
 
         email_message = EmailMessage(subject=subject, body=message, to=[user.email])
@@ -57,13 +57,28 @@ class Util:
         MessageThread(message).start()
 
     @staticmethod
-    def send_welcome_email(request, user):
-        current_site = f'{request.scheme}://{request.get_host()}'
+    def send_welcome_email(user):
         subject = 'Account Verified'
         message = render_to_string('accounts/welcomemessage.html', {
-            'domain':current_site,
+            'FRONTEND_URL':settings.FRONTEND_URL,
             'name':user.name, 
             'site_name': settings.SITE_NAME,
+        })
+
+        email_message = EmailMessage(subject=subject, body=message, to=[user.email])
+        email_message.content_subtype = "html"
+        
+        MessageThread(email_message).start()
+
+    @staticmethod
+    def send_password_reset_email(user):
+        subject = 'Reset your password'
+        message = render_to_string('accounts/reset-password-email.html', {
+            'name':user.name, 
+            'FRONTEND_URL':settings.FRONTEND_URL, 
+            'site_name': settings.SITE_NAME,
+            'uid': urlsafe_base64_encode(force_bytes(user.id)),
+            'token': password_reset_generate_token.make_token(user)
         })
 
         email_message = EmailMessage(subject=subject, body=message, to=[user.email])

@@ -26,7 +26,7 @@ DEBUG = config('DEBUG')
 ALLOWED_HOSTS = config('ALLOWED_HOSTS').split(" ")
 
 REST_FRAMEWORK = {
-    'EXCEPTION_HANDLER': 'common.custom_methods.custom_exception_handler',
+    'EXCEPTION_HANDLER': 'apps.common.custom_methods.custom_exception_handler',
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
     'DEFAULT_PERMISSION_CLASSES': (
@@ -197,6 +197,9 @@ INTERNAL_IPS = [
     '127.0.0.1',
 ]
 SITE_NAME = config('SITE_NAME')
+FRONTEND_URL = config('FRONTEND_URL')
+
+PASSWORD_RESET_TIMEOUT = 900
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +295,7 @@ JAZZMIN_SETTINGS = {
 
     # Additional links to include in the user menu on the top right ("app" url type is not allowed)
     "usermenu_links": [
-        {"name": "WWC V2 FrontPage", "url": "/", "new_window": True},
+        {"name": "WWC V2 FrontPage", "url": FRONTEND_URL, "new_window": True},
         {"model": "accounts.user"}
     ],
 

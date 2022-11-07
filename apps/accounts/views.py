@@ -13,7 +13,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveUpdateAPIView, RetrieveUpdateDestroyAPIView, GenericAPIView, CreateAPIView
 from . models import Jwt, User
 from . authentication import Authentication
-from . senders import Util, generate_token
+from . senders import Util, email_verification_generate_token, password_reset_generate_token
 
 from datetime import datetime, timedelta
 import jwt
@@ -69,10 +69,9 @@ class RegisterView(APIView):
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         user = User.objects.create_user(**serializer.validated_data)
     
-        Util.send_verification_email(request, user)
+        Util.send_verification_email(user)
         
         return Response({"success": "Registration successful. Check email for verification code."}, status=201)
 
@@ -166,51 +165,51 @@ class LogoutView(APIView):
 #-------------------------------------------------------------------------------------------------------
 
 class VerifyEmail(APIView):
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
-            uid = force_str(urlsafe_base64_decode(self.kwargs.get('uidb64')))
+            uid = force_str(urlsafe_base64_decode(kwargs.get('uidb64')))
             user = User.objects.get(id=uid)
 
         except Exception as e:
             user = None
 
-        if user and generate_token.check_token(user, self.kwargs.get('token')):
+        if user and email_verification_generate_token.check_token(user, kwargs.get('token')):
             user.is_email_verified = True
             user.save()
             Util.send_sms_otp(user)
             return Response({'success': 'Email verified'}, status=200)
 
-        return Response({'error': 'Link is broken or has already been used'})
+        return Response({'error': 'Link is broken, expired or has already been used'})
 
 class VerifyPhone(APIView):
     serializer_class = VerifyPhoneSerializer
     permission_classes = (AllowAny,)
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            phone = serializer.data['email']
-            otp = serializer.data['otp']
-            user_obj = User.objects.filter(phone=phone)
-            if not user_obj.exists():
-                return Response({"error": {
-                    "invalid_phone" :"Invalid Phone Number"
-                }}, status=400)
-            user = user_obj.first()
-            if user.otp != otp:
-                return Response({"error": {
-                    "invalid_otp" :"Invalid OTP"
-                }}, status=400)
-            if user.is_phone_verified:
-                return Response({"error": {
-                    "phone_already_verified" :"Phone Number already verified. Proceed to login!"
-                }}, status=400)
+        serializer.is_valid(raise_exception=True)
+        phone = serializer.data['phone']
+        otp = serializer.data['otp']
+        user_obj = User.objects.filter(phone=phone)
+        if not user_obj.exists():
+            return Response({"error": {
+                "invalid_phone" :"Invalid Phone Number"
+            }}, status=400)
+        user = user_obj.first()
+        if user.otp != otp:
+            return Response({"error": {
+                "invalid_otp" :"Invalid OTP"
+            }}, status=400)
+        if user.is_phone_verified:
+            return Response({"error": {
+                "phone_already_verified" :"Phone Number already verified. Proceed to login!"
+            }}, status=400)
 
-            user.is_phone_verified = True
-            user.otp = None
-            user.save()
-            Util.send_welcome_email(request, user)
-            return Response({'success': 'Phone Number verified!'}, status=200)
+        user.is_phone_verified = True
+        user.otp = None
+        user.save()
+        Util.send_welcome_email(user)
+        return Response({'success': 'Phone Number verified!'}, status=200)
 
 class ResendPhoneOtp(APIView):
     serializer_class = ResendOtpSerializer
@@ -219,19 +218,20 @@ class ResendPhoneOtp(APIView):
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         print(serializer)
-        if serializer.is_valid(raise_exception=True):
-            phone = serializer.data['phone']
-            user = User.objects.filter(phone=phone)
-            if not user.exists():
-                return Response({"error": {
-                    "invalid_phone" :"Invalid Phone Number"
-                }}, status=400)
-            if user[0].is_phone_verified == True:
-                return Response({"error": {
-                    "phone_already_verified" :"Phone number already verified. Proceed to login!"
-                }}, status=400)
-            Util.send_sms_otp(user)
-            return Response({'success': 'New otp sent!'}, status=200)
+        serializer.is_valid(raise_exception=True)
+        phone = serializer.data['phone']
+        user = User.objects.filter(phone=phone)
+        if not user.exists():
+            return Response({"error": {
+                "invalid_phone" :"Invalid Phone Number"
+            }}, status=400)
+        if user[0].is_phone_verified == True:
+            return Response({"error": {
+                "phone_already_verified" :"Phone number already verified. Proceed to login!"
+            }}, status=400)
+        user = user.get()
+        Util.send_sms_otp(user)
+        return Response({'success': 'New otp sent!'}, status=200)
 
 class ResendEmailActivation(APIView):
     serializer_class = ResendActivationEmailSerializer
@@ -239,21 +239,20 @@ class ResendEmailActivation(APIView):
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
-        print(serializer)
-        if serializer.is_valid(raise_exception=True):
-            email = serializer.data['email']
-            user = User.objects.filter(email=email)
-            if not user.exists():
-                return Response({"error": {
-                    "invalid_email" :"Invalid Email Address"
-                }}, status=400)
-            if user[0].is_email_verified == True:
-                return Response({"error": {
-                    "email_already_verified" :"Email address already verified. Proceed to login!"
-                }}, status=400)
-
-            Util.send_verification_email(request, user)
-            return Response({'success': 'Activation link sent to email!'}, status=200)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.data['email']
+        user = User.objects.filter(email=email)
+        if not user.exists():
+            return Response({"error": {
+                "invalid_email" :"Invalid Email Address"
+            }}, status=400)
+        if user[0].is_email_verified == True:
+            return Response({"error": {
+                "email_already_verified" :"Email address already verified. Proceed to login!"
+            }}, status=400)
+        user = user.get()
+        Util.send_verification_email(user)
+        return Response({'success': 'Activation link sent to email!'}, status=200)
 
 #-------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------
@@ -268,38 +267,14 @@ class RequestPasswordResetEmail(APIView):
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
-        print(serializer)
-        if serializer.is_valid(raise_exception=True):
-            email = serializer.data['email']
-            user = User.objects.filter(email=email)
-            if not user.exists():
-                return Response({"error": "Invalid email!"}, status=400)
-            Util.send_password_change_otp(user[0].email)
-            return Response({'success': 'Password Otp sent!'}, status=200)
-
-class CheckPasswordResetOtp(APIView):
-    serializer_class = CheckPasswordResetOtpSerializer
-    permission_classes = (AllowAny,)
-    
-    def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            
-            email = serializer.data['email']
-            otp = serializer.data['otp']
-            user_obj = User.objects.filter(email=email)
-            if not user_obj.exists():
-                return Response({"error": "Invalid email!"}, status=400)
-            user = user_obj.first()
-            if user.otp.code != otp:
-                return Response({'error': 'Invalid otp!'}, status=400)
-            if user.otp.check_otp_expiration == True:
-                user.otp.code = None
-                user.otp.save()
-                return Response({'error': 'Otp has expired!. Request new otp'}, status=400)
-            
-            return Response({'success': 'Correct Otp'}, status=200)
-    
+        serializer.is_valid(raise_exception=True)
+        email = serializer.data['email']
+        user = User.objects.filter(email=email)
+        if not user.exists():
+            return Response({"error": "Invalid email!"}, status=400)
+        user = user.get()
+        Util.send_password_reset_email(user)
+        return Response({'success': 'Password email sent!'}, status=200)    
 
 class SetNewPasswordAPIView(GenericAPIView):
     serializer_class = SetNewPasswordSerializer
@@ -307,27 +282,23 @@ class SetNewPasswordAPIView(GenericAPIView):
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            print(serializer)
-            email = serializer.data['email']
-            otp = serializer.data['otp']
-            password = serializer.data['password']
-            user_obj = User.objects.filter(email=email)
-            if not user_obj.exists():
-                return Response({"error": "Invalid email!"}, status=400)
-            user = user_obj.first()
-            if user.otp.code != otp:
-                return Response({'error': 'Invalid otp!'}, status=400)
-            if user.otp.check_otp_expiration == True:
-                user.otp.code = None
-                user.otp.save()
-                return Response({'error': 'Otp session expired!. Request new otp'}, status=400)
-            
-            user.set_password(password)
-            user.otp.code = None
-            user.otp.save()
-            user.save()
-            return Response({'success': 'Password reset success!'}, status=200)
+
+        serializer.is_valid(raise_exception=True)
+        try:
+            uid = force_str(urlsafe_base64_decode(serializer.data['uid']))
+            user = User.objects.get(id=uid)
+
+        except Exception as e:
+            user = None
+
+        if not user or not password_reset_generate_token.check_token(user, serializer.data['token']):
+            return Response({'error': 
+                {'token_error': 'Link is broken, expired or has already been used'}
+            }, status=400)
+
+        user.set_password(serializer.data['new_password'])
+        user.save()
+        return Response({'success': 'Password reset success!'}, status=200)
 
 #-------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------
