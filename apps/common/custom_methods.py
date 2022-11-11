@@ -7,7 +7,7 @@ from apps.accounts.models import User
 class IsAuthenticatedCustom(BasePermission):
 
     def has_permission(self, request, view):
-        from accounts.views import decodeJWT
+        from apps.accounts.views import decodeJWT
         user = decodeJWT(request.META['HTTP_AUTHORIZATION'])
         if not user:
             return False
@@ -21,7 +21,7 @@ class IsAuthenticatedCustom(BasePermission):
 class IsAdminCustom(BasePermission):
 
     def has_permission(self, request, view):
-        from accounts.views import decodeJWT
+        from apps.accounts.views import decodeJWT
         user = decodeJWT(request.META['HTTP_AUTHORIZATION'])
         if not (user and user.is_staff):
             return False

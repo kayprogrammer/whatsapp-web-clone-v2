@@ -1,6 +1,5 @@
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
-from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.contrib.auth import authenticate
@@ -58,10 +57,9 @@ def decodeJWT(bearer):
 #-------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------
 
-#-------------------------------------------------------------------------------------------------
-#----------------REGISTER LOGIN AUTH----------------------------------------------------------
-#-------------------------------------------------------------------------------------------------------
-
+#-----------------------------------------------------------------------------------------------
+#----------------REGISTER LOGIN LOGOUT----------------------------------------------------------
+#-----------------------------------------------------------------------------------------------
 class RegisterView(APIView):
     serializer_class = RegisterSerializer
     permission_classes = (AllowAny,)
@@ -87,7 +85,7 @@ class LoginView(APIView):
             username=serializer.validated_data['email_or_phone'],
             password=serializer.validated_data['password']
         )
-
+       
         if not user:
             return Response({"error": {
                 "invalid_credentials" :"Invalid credentials"
@@ -96,27 +94,23 @@ class LoginView(APIView):
         if not user.is_email_verified:
             return Response({"error": {
                 "email_not_verified" :"You must verify your email first"
-            }}, status=400)
+            }}, status=401)
 
         if not user.is_phone_verified:
             return Response({"error": {
                 "phone_not_verified" :"You must verify your phone number first"
-            }}, status=400)
+            }}, status=401)
             
-        Jwt.objects.filter(user_id=user.id).delete()
+        Jwt.objects.filter(user=user).delete()
 
-        access = get_access_token({"user_id": user.id, "name":user.name, "email":user.email, "phone":user.phone, 'avatar': user.avatarURL, 'timezone': user.tz.name })
+        access = get_access_token({"user_id": str(user.id), "name":user.name, "email":user.email, "phone":user.phone, 'avatar': user.avatarURL, 'timezone': user.tz.name })
 
         refresh = get_refresh_token()
-
+        # print(type(access))
         Jwt.objects.create(
-            user_id=user.id, access=access.decode(), refresh=refresh.decode()
+            user=user, access=access, refresh=refresh
         )
-#         authtoken = {"access": access, "refresh": refresh}
-#         response = Response() get_access_token({"user_id": user.id, "first_name":user.first_name, "last_name":user.last_name, "is_tutor":user.is_tutor, 'avatar': user.avatarUrl, 'hours': user.student.hours.filter(valid=True, status="UNUSED") if hasattr(user.student) else 0})
-#         response.set_cookie(key = "authtoken", value = authtoken, max_age=300, httponly=True)
-#         csrf.get_token(request)
-#         response.data = {'jwt':authtoken}
+
         return Response({"access": access, "refresh": refresh}, status=201)
 
 class RefreshView(APIView):
@@ -140,8 +134,8 @@ class RefreshView(APIView):
         refresh = get_refresh_token()
 
 
-        active_jwt.access = access.decode()
-        active_jwt.refresh = refresh.decode()
+        active_jwt.access = access
+        active_jwt.refresh = refresh
         active_jwt.save()
 
         print('There was a refresh')
@@ -194,16 +188,16 @@ class VerifyPhone(APIView):
         if not user_obj.exists():
             return Response({"error": {
                 "invalid_phone" :"Invalid Phone Number"
-            }}, status=400)
+            }}, status=422)
         user = user_obj.first()
         if user.otp != otp:
             return Response({"error": {
                 "invalid_otp" :"Invalid OTP"
-            }}, status=400)
+            }}, status=422)
         if user.is_phone_verified:
             return Response({"error": {
                 "phone_already_verified" :"Phone Number already verified. Proceed to login!"
-            }}, status=400)
+            }}, status=422)
 
         user.is_phone_verified = True
         user.otp = None
@@ -224,11 +218,11 @@ class ResendPhoneOtp(APIView):
         if not user.exists():
             return Response({"error": {
                 "invalid_phone" :"Invalid Phone Number"
-            }}, status=400)
+            }}, status=422)
         if user[0].is_phone_verified == True:
             return Response({"error": {
                 "phone_already_verified" :"Phone number already verified. Proceed to login!"
-            }}, status=400)
+            }}, status=422)
         user = user.get()
         Util.send_sms_otp(user)
         return Response({'success': 'New otp sent!'}, status=200)
@@ -245,11 +239,11 @@ class ResendEmailActivation(APIView):
         if not user.exists():
             return Response({"error": {
                 "invalid_email" :"Invalid Email Address"
-            }}, status=400)
+            }}, status=422)
         if user[0].is_email_verified == True:
             return Response({"error": {
                 "email_already_verified" :"Email address already verified. Proceed to login!"
-            }}, status=400)
+            }}, status=422)
         user = user.get()
         Util.send_verification_email(user)
         return Response({'success': 'Activation link sent to email!'}, status=200)
@@ -271,7 +265,7 @@ class RequestPasswordResetEmail(APIView):
         email = serializer.data['email']
         user = User.objects.filter(email=email)
         if not user.exists():
-            return Response({"error": "Invalid email!"}, status=400)
+            return Response({"error": "Invalid email!"}, status=422)
         user = user.get()
         Util.send_password_reset_email(user)
         return Response({'success': 'Password email sent!'}, status=200)    
