@@ -48,7 +48,12 @@ def decodeJWT(bearer):
         return None
 
     token = bearer[7:]
-    decoded = jwt.decode(token, key=settings.SECRET_KEY)
+
+    try:
+        decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return None
+
     if decoded:
         try:
             return User.objects.get(id=decoded["user_id"])
@@ -106,7 +111,7 @@ class LoginView(APIView):
         access = get_access_token({"user_id": str(user.id), "name":user.name, "email":user.email, "phone":user.phone, 'avatar': user.avatarURL, 'timezone': user.tz.name })
 
         refresh = get_refresh_token()
-        # print(type(access))
+
         Jwt.objects.create(
             user=user, access=access, refresh=refresh
         )
@@ -129,7 +134,7 @@ class RefreshView(APIView):
         if not Authentication.verify_token(serializer.validated_data["refresh"]):
             return Response({"error": "Token is invalid or has expired"})
 
-        access = get_access_token({"user_id": active_jwt.user.id, "name":active_jwt.user.name, "email": active_jwt.user.email, 'phone': active_jwt.user.phone, 'avatar': active_jwt.user.avatarURL, 'timezone': active_jwt.user.tz.name })
+        access = get_access_token({"user_id": str(active_jwt.user.id), "name":active_jwt.user.name, "email": active_jwt.user.email, 'phone': active_jwt.user.phone, 'avatar': active_jwt.user.avatarURL, 'timezone': active_jwt.user.tz.name })
 
         refresh = get_refresh_token()
 
@@ -187,7 +192,7 @@ class VerifyPhone(APIView):
         user_obj = User.objects.filter(phone=phone)
         if not user_obj.exists():
             return Response({"error": {
-                "invalid_phone" :"Invalid Phone Number"
+                "invalid_phone" :"Phone number not registered"
             }}, status=422)
         user = user_obj.first()
         if user.otp != otp:
@@ -217,7 +222,7 @@ class ResendPhoneOtp(APIView):
         user = User.objects.filter(phone=phone)
         if not user.exists():
             return Response({"error": {
-                "invalid_phone" :"Invalid Phone Number"
+                "invalid_phone" :"Phone number not registered"
             }}, status=422)
         if user[0].is_phone_verified == True:
             return Response({"error": {
@@ -238,7 +243,7 @@ class ResendEmailActivation(APIView):
         user = User.objects.filter(email=email)
         if not user.exists():
             return Response({"error": {
-                "invalid_email" :"Invalid Email Address"
+                "invalid_email" :"Email address not registered"
             }}, status=422)
         if user[0].is_email_verified == True:
             return Response({"error": {
@@ -265,7 +270,7 @@ class RequestPasswordResetEmail(APIView):
         email = serializer.data['email']
         user = User.objects.filter(email=email)
         if not user.exists():
-            return Response({"error": "Invalid email!"}, status=422)
+            return Response({"error": "Email address not registered!"}, status=422)
         user = user.get()
         Util.send_password_reset_email(user)
         return Response({'success': 'Password email sent!'}, status=200)    

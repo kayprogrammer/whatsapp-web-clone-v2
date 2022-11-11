@@ -68,7 +68,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     #----------------------#
 
     terms_agreement = models.BooleanField(default=False)
-    is_online = models.BooleanField(default=False)
+    is_online = models.DateTimeField(default=timezone.now)
     is_email_verified = models.BooleanField(default=False)
     is_phone_verified = models.BooleanField(default=False)
     otp = models.IntegerField(null=True, blank=True)
